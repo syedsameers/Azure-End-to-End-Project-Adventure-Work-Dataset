@@ -11,7 +11,7 @@ An enterprise-grade, cloud-native data engineering solution built on Microsoft A
 Below is the complete architectural layout of the pipeline, showcasing the dynamic transition of data through ingestion, transformation, serving, and visualization layers:
 
 <p align="center">
-  <img src="docs/architecture.png" alt="Azure Medallion Architecture Flowchart" width="100%">
+  <img src="architecture.png" alt="Azure Medallion Architecture Flowchart" width="100%">
 </p>
 
 1. **Ingest (Bronze)**: Metadata-driven dynamic ingestion with Azure Data Factory into ADLS Gen2.
@@ -27,13 +27,13 @@ Below is the complete architectural layout of the pipeline, showcasing the dynam
 * **Pipeline Configuration**: Leveraged a metadata-driven dynamic framework to replace static copy tasks. By ingesting a control parameters file, the ADF `ForEach` container dynamically loops through 11 operational targets to run parameterized copies.
 
 <p align="center">
-  <img src="docs/adf_pipeline.png" alt="Azure Data Factory Dynamic Ingestion Pipeline" width="90%">
+  <img src="adf_pipeline.png" alt="Azure Data Factory Dynamic Ingestion Pipeline" width="90%">
 </p>
 
 * **Data Storage**: Data lands in its raw, unaltered state in ADLS Gen2 `bronze` container organized dynamically by entities.
 
 <p align="center">
-  <img src="docs/adls_bronze.png" alt="Azure Data Lake ADLS Gen2 Bronze Container Store" width="90%">
+  <img src="adls_bronze.png" alt="Azure Data Lake ADLS Gen2 Bronze Container Store" width="90%">
 </p>
 
 #### Data Ingested (GitHub Data API Source)
@@ -52,6 +52,10 @@ Below is the complete architectural layout of the pipeline, showcasing the dynam
 * Authenticated securely to ADLS Gen2 utilizing OAuth 2.0 through Microsoft Entra ID App registrations, keeping parameters safe with Azure Key Vault secrets.
 * Applied massive transform operations: Unified multiple years of transactional partition files (`Sales 2015`, `2016`, `2017`), parsed irregular date formats (`MM-dd-yyyy` and `M/d/yyyy`), cast strict schema typing, handled nulls, split string IDs (`split`), and deleted composite duplicates.
 * Persisted datasets as partitioned Parquet files inside the `silver` storage zone.
+
+<p align="center">
+  <img src="databricks_pyspark.png" alt="Azure Databricks PySpark Notebook Silver Layer" width="90%">
+</p>
 
 ```python
 # Spark 3.5.0 / PySpark Transform Sample for Sales partition consolidation:
@@ -76,3 +80,11 @@ df_sales_clean = (df_sales_raw
 
 # 3. Write to Silver container in Parquet format
 df_sales_clean.write.format("parquet").mode("overwrite").save(f"abfss://silver@{storage_account}.dfs.core.windows.net/AdventureWorks_Sales/")
+
+<p align="center">
+  <img src="synapse_gold.png.png" alt="Azure Synapse Analytics Serverless SQL Views Creation" width="90%">
+</p>
+
+<p align="center">
+  <img src="powerbi_dashboard.png" alt="AdventureWorks Sales Power BI Dashboard" width="90%">
+</p>
