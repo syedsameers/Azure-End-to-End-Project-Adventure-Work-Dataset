@@ -81,10 +81,86 @@ df_sales_clean = (df_sales_raw
 # 3. Write to Silver container in Parquet format
 df_sales_clean.write.format("parquet").mode("overwrite").save(f"abfss://silver@{storage_account}.dfs.core.windows.net/AdventureWorks_Sales/")
 
+---
+
+### 3️⃣ Serving Layer & Logical Data Warehouse (Azure Synapse Analytics Gold)
+
+To make data ready for analytical queries without duplicating storage or managing expensive always-on SQL databases, **Azure Synapse Analytics Serverless SQL Pools** was used as the Gold serving layer.
+
+#### Key Architectural Implementations:
+1. **Managed Identity Security**: Configured Azure Synapse workspace with a System-Assigned Managed Identity and granted it `Storage Blob Data Contributor` on the ADLS Gen2 storage account to ensure zero credential leaks.
+2. **Serverless Abstraction Layer (`OPENROWSET`)**:
+   * Created serverless logical views over cleansed Silver Parquet files directly within the data lake.
+   * Enables ad-hoc SQL querying without loading raw data into persistent relational storage, reducing compute and infrastructure costs.
+3. **Optimized Materialization via CETAS**:
+   * Implemented **CETAS (Create External Table As Select)** to generate optimized analytical Gold tables saved back into the `gold` container with Snappy Parquet compression.
+
+#### SQL Implementation Scripts:
+
+```sql
+-- 1. Create Dedicated Analytical Schema
+CREATE SCHEMA gold;
+GO
+
+-- 2. Create Serverless Views Using OPENROWSET Over Silver Parquet Files
+CREATE VIEW gold.calendar
+AS
+SELECT *
+FROM OPENROWSET(
+    BULK '[https://azuree2eprojectdatalake.dfs.core.windows.net/silver/AdventureWorks_Calendar/](https://azuree2eprojectdatalake.dfs.core.windows.net/silver/AdventureWorks_Calendar/)',
+    FORMAT = 'PARQUET'
+) AS QUERY1;
+GO
+
+CREATE VIEW gold.customers
+AS
+SELECT *
+FROM OPENROWSET(
+    BULK '[https://azuree2eprojectdatalake.dfs.core.windows.net/silver/AdventureWorks_Customers/](https://azuree2eprojectdatalake.dfs.core.windows.net/silver/AdventureWorks_Customers/)',
+    FORMAT = 'PARQUET'
+) AS QUERY1;
+GO
+
+CREATE VIEW gold.products
+AS
+SELECT *
+FROM OPENROWSET(
+    BULK '[https://azuree2eprojectdatalake.dfs.core.windows.net/silver/AdventureWorks_Products/](https://azuree2eprojectdatalake.dfs.core.windows.net/silver/AdventureWorks_Products/)',
+    FORMAT = 'PARQUET'
+) AS QUERY1;
+GO
+
+-- 3. Materialize Gold Tables Using CETAS (Create External Table As Select)
+CREATE EXTERNAL TABLE gold.ext_sales
+WITH (
+    LOCATION = 'external_sales/',
+    DATA_SOURCE = source_gold,
+    FILE_FORMAT = format_parquet
+)
+AS
+SELECT * 
+FROM gold.sales;
+GO
+
 <p align="center">
   <img src="synapse_gold.png.png" alt="Azure Synapse Analytics Serverless SQL Views Creation" width="90%">
 </p>
 
+4️⃣ Business Intelligence & Visual Analytics (Microsoft Power BI)
+The final phase bridges enterprise data engineering with business decision-making by delivering self-service business intelligence dashboards directly connected to the Synapse serverless SQL endpoint.
+
+Implementation & Architecture:
+Connectivity: Connected Power BI Desktop to Azure Synapse using the native Azure Synapse Analytics SQL connector via the workspace Serverless SQL Endpoint (<workspace-name>-ondemand.sql.azuresynapse.net).
+
+Semantic Modeling: Modeled star-schema analytical relationships between the materialized gold.ext_sales fact table and dimension views (customers, products, calendar, territories).
+
+Core Business KPIs & Visualizations:
+
+Executive Cards: Dynamic tracking of total active customers, gross order quantities, and product catalog volumes.
+
+Order Progression Curve: Area chart evaluating historical order volumes across financial quarters and years (2015–2017).
+
+Order Quantity vs. Line Item Movement: Visualizing product batch movement and high-frequency purchase thresholds.
 <p align="center">
   <img src="powerbi_dashboard.png" alt="AdventureWorks Sales Power BI Dashboard" width="90%">
 </p>
